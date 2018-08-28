@@ -89,14 +89,17 @@ public class PwdModifyHandler implements ExtendedOperationHandler<PasswordModify
     /**
      * Modify the user's credentials.
      */
-    private void modifyUserPassword( CoreSession userSession, IoSession ioPipe, Dn userDn, byte[] oldPassword, byte[] newPassword,
-        PasswordModifyRequest req )
+
+    private void modifyUserPassword( LdapSession requestor, Dn userDn, byte[] oldPassword, byte[] newPassword,
+         PasswordModifyRequest req )
     {
         // First, check that the user exists
-        try
-        {
-            Entry userEntry = userSession.lookup( userDn, SchemaConstants.ALL_ATTRIBUTES_ARRAY );
-            
+       IoSession ioPipe = requestor.getIoSession();
+       try
+       {
+           DirectoryService service = requestor.getLdapServer().getDirectoryService();
+           Entry userEntry = service.getAdminSession().lookup( userDn, SchemaConstants.ALL_ATTRIBUTES_ARRAY );
+
             if ( userEntry == null )
             {
                 LOG.error( "Cannot find an entry for DN " + userDn );
@@ -185,9 +188,9 @@ public class PwdModifyHandler implements ExtendedOperationHandler<PasswordModify
 
         try
         {
-            userSession.modify( modifyRequest );
+            requestor.getCoreSession().modify( modifyRequest );
 
-            LOG.debug( "Password modified for user " + userDn );
+            LOG.info( "Password modified for user " + userDn );
 
             // Ok, all done
             PasswordModifyResponseImpl pmrl = new PasswordModifyResponseImpl(
@@ -285,16 +288,17 @@ public class PwdModifyHandler implements ExtendedOperationHandler<PasswordModify
                         req.getMessageId(), ResultCodeEnum.INSUFFICIENT_ACCESS_RIGHTS,
                         "Non-admin user cannot access another user's password to modify it" ) );
                 }
-                else
-                {
-                    // We are administrator, we can try to modify the user's credentials
-                    modifyUserPassword( requestor.getCoreSession(), requestor.getIoSession(), userDn, oldPassword, newPassword, req );
+
+                 else
+                 {
+                     // We are administrator, we can try to modify the user's credentials
+                    modifyUserPassword( requestor, userDn, oldPassword, newPassword, req );
                 }
             }
             else
             {
                 // We are trying to modify our own password
-                modifyUserPassword( requestor.getCoreSession(), requestor.getIoSession(), principalDn, oldPassword, newPassword, req );
+                modifyUserPassword( requestor, principalDn, oldPassword, newPassword, req );
             }
         }
         else
@@ -319,11 +323,11 @@ public class PwdModifyHandler implements ExtendedOperationHandler<PasswordModify
                 return;
             }
 
-            // Ok, we were able to bind using the userIdentity and the password. Let's
-            // modify the password now
-            modifyUserPassword( requestor.getCoreSession(), requestor.getIoSession(), userDn, oldPassword, newPassword, req );
+             // Ok, we were able to bind using the userIdentity and the password. Let's
+             // modify the password now
+            modifyUserPassword( requestor, userDn, oldPassword, newPassword, req );
         }
-    }
+     }
 
 
     /**
